@@ -4,11 +4,11 @@ from PyQt5.QtWidgets import (
     QApplication, QWidget, QGridLayout, QLabel, QPushButton, 
     QVBoxLayout, QScrollArea, QHBoxLayout, QLineEdit, QStackedWidget, QSpacerItem, QSizePolicy
 )
-
 from PyQt5.QtGui import QPixmap, QFont
 from PyQt5.QtCore import Qt
 from io import BytesIO
 from api_service import MovieAPI  # Make sure the api_service is correctly imported
+from database import MovieDatabase  # Import the MovieDatabase class
 
 # Constants for UI layout
 IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w200"
@@ -23,6 +23,7 @@ class MovieApp(QWidget):
         self.showMaximized()
 
         self.api = MovieAPI()  # Initialize API
+        self.database = MovieDatabase()
 
         # Initialize pagination
         self.current_page = 1
@@ -151,22 +152,101 @@ class MovieApp(QWidget):
     def init_watchlist_page(self):
         """Initialize the watchlist page."""
         layout = QVBoxLayout(self.watchlist_page)
+
         self.watchlist_label = QLabel("Watchlist")
         self.watchlist_label.setAlignment(Qt.AlignCenter)
+        font = QFont()
+        font.setPointSize(24)
+        font.setBold(True)
+        self.watchlist_label.setFont(font)
         layout.addWidget(self.watchlist_label)
 
-        # Add widgets or content for watchlist page
-        # Example: Display the list of movies added to watchlist
+        # Scroll Area for Watchlist
+        self.watchlist_scroll_area = QScrollArea()
+        self.watchlist_scroll_area.setWidgetResizable(True)
+        self.watchlist_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # Disable horizontal scrolling
+
+        self.watchlist_scroll_widget = QWidget()
+        self.watchlist_grid = QGridLayout(self.watchlist_scroll_widget)
+        self.watchlist_grid.setSpacing(GAP_SIZE)
+
+        self.watchlist_scroll_area.setWidget(self.watchlist_scroll_widget)
+        layout.addWidget(self.watchlist_scroll_area)
+
+        # Load watchlist movies
+        self.load_watchlist_movies()
+    
+    def load_watchlist_movies(self):
+        """Fetch and display movies in the watchlist with dynamic columns."""
+        for i in reversed(range(self.watchlist_grid.count())):
+            widget = self.watchlist_grid.itemAt(i).widget()
+            if widget:
+                widget.setParent(None)
+
+        watchlist_movies = self.database.fetch_watchlist()  # Fetch watchlist from database
+
+        # Calculate the number of columns dynamically based on the scroll area width
+        grid_width = self.watchlist_scroll_area.viewport().width() - 40  # Adjust for padding
+        columns = max(1, grid_width // (POSTER_WIDTH + GAP_SIZE))
+
+        row, col = 0, 0
+        for movie in watchlist_movies:
+            movie_id, title, poster_path = movie[1], movie[2], movie[3]  # Extract movie details
+            movie_data = {"id": movie_id, "title": title, "poster_path": poster_path}  # Create a dictionary for the movie
+            self.add_movie_to_grid(self.watchlist_grid, movie_data, row, col)
+            col += 1
+            if col >= columns:
+                col = 0
+                row += 1
 
     def init_favorites_page(self):
         """Initialize the favorites page."""
         layout = QVBoxLayout(self.favorites_page)
+
         self.favorites_label = QLabel("Favorites")
         self.favorites_label.setAlignment(Qt.AlignCenter)
+        font = QFont()
+        font.setPointSize(24)
+        font.setBold(True)
+        self.favorites_label.setFont(font)
         layout.addWidget(self.favorites_label)
 
-        # Add widgets or content for favorites page
-        # Example: Display the list of favorite movies
+        # Scroll Area for Favorites
+        self.favorites_scroll_area = QScrollArea()
+        self.favorites_scroll_area.setWidgetResizable(True)
+        self.favorites_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # Disable horizontal scrolling
+
+        self.favorites_scroll_widget = QWidget()
+        self.favorites_grid = QGridLayout(self.favorites_scroll_widget)
+        self.favorites_grid.setSpacing(GAP_SIZE)
+
+        self.favorites_scroll_area.setWidget(self.favorites_scroll_widget)
+        layout.addWidget(self.favorites_scroll_area)
+
+        # Load favorite movies
+        self.load_favorites_movies()
+
+    def load_favorites_movies(self):
+        """Fetch and display movies in the favorites with dynamic columns."""
+        for i in reversed(range(self.favorites_grid.count())):
+            widget = self.favorites_grid.itemAt(i).widget()
+            if widget:
+                widget.setParent(None)
+
+        favorites_movies = self.database.fetch_favorites()  # Fetch favorites from database
+
+        grid_width = self.favorites_scroll_area.viewport().width() - 40  # Adjust for padding
+        columns = max(1, grid_width // (POSTER_WIDTH + GAP_SIZE))
+
+        row, col = 0, 0
+        for movie in favorites_movies:
+            movie_id, title, poster_path = movie[1], movie[2], movie[3]  # Extract movie details
+            movie_data = {"title": title, "poster_path": poster_path}  # Create a dictionary for the movie
+            self.add_movie_to_grid(self.favorites_grid, movie_data, row, col)
+            col += 1
+            if col >= columns:
+                col = 0
+                row += 1
 
     def load_trending_movies(self):
         """Fetch and display trending movies with uniform spacing."""
@@ -257,6 +337,7 @@ class MovieApp(QWidget):
         """Helper method to add a movie to the grid with proper alignment."""
         title = movie.get("title", "Unknown")
         poster_path = movie.get("poster_path")
+        movie_id = movie.get("id")  # Assuming movie has an 'id' field
         poster_url = f"{IMAGE_BASE_URL}{poster_path}" if poster_path else ""
 
         item_widget = QWidget()
@@ -273,10 +354,64 @@ class MovieApp(QWidget):
 
         title_label = QLabel(title)
         title_label.setAlignment(Qt.AlignCenter)
+
+        font = QFont()
+        font.setPointSize(10)  # Increase font size
+        font.setBold(True)  # Make font bolder
+        title_label.setFont(font)
+
         item_layout.addWidget(title_label)
+
+        # Add 'Add to Watchlist' button
+        watchlist_button = QPushButton("Add to Watchlist")
+        if not self.is_movie_in_watchlist(movie_id):
+            watchlist_button.clicked.connect(lambda: self.add_to_watchlist(movie_id, title, poster_path))
+        else:
+            watchlist_button.setText("Remove from Watchlist")
+            watchlist_button.clicked.connect(lambda: self.remove_from_watchlist(movie_id))
+        item_layout.addWidget(watchlist_button)
+
+        # Add 'Add to Favorites' button
+        favorites_button = QPushButton("Add to Favorites")
+        if not self.is_movie_in_favorites(movie_id):
+            favorites_button.clicked.connect(lambda: self.add_to_favorites(movie_id, title, poster_path))
+        else:
+            favorites_button.setText("Remove from Favorites")
+            favorites_button.clicked.connect(lambda: self.remove_from_favorites(movie_id))
+        item_layout.addWidget(favorites_button)
 
         item_widget.setLayout(item_layout)
         grid.addWidget(item_widget, row, col, Qt.AlignCenter)
+
+    def is_movie_in_watchlist(self, movie_id):
+        """Check if a movie is already in the watchlist."""
+        watchlist_movies = self.database.fetch_watchlist()
+        return any(movie[1] == movie_id for movie in watchlist_movies)
+
+    def is_movie_in_favorites(self, movie_id):
+        """Check if a movie is already in the favorites."""
+        favorites_movies = self.database.fetch_favorites()
+        return any(movie[1] == movie_id for movie in favorites_movies)
+
+    def add_to_watchlist(self, movie_id, title, poster_path):
+        """Add movie to the watchlist and update the UI."""
+        self.database.add_to_watchlist(movie_id, title, poster_path)
+        self.load_watchlist_movies()  # Reload the watchlist to reflect changes
+
+    def remove_from_watchlist(self, movie_id):
+        """Remove movie from the watchlist and update the UI."""
+        self.database.remove_from_watchlist(movie_id)
+        self.load_watchlist_movies()  # Reload the watchlist to reflect changes
+
+    def add_to_favorites(self, movie_id, title, poster_path):
+        """Add movie to the favorites and update the UI."""
+        self.database.add_to_favorites(movie_id, title, poster_path)
+        self.load_favorites_movies()  # Reload the favorites to reflect changes
+
+    def remove_from_favorites(self, movie_id):
+        """Remove movie from the favorites and update the UI."""
+        self.database.remove_from_favorites(movie_id)
+        self.load_favorites_movies()  # Reload the favorites to reflect changes
 
     def load_image(self, url):
         """Fetch and return a QPixmap from the given URL."""
