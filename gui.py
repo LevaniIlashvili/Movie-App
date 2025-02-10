@@ -38,17 +38,20 @@ class MovieApp(QWidget):
         self.search_btn = QPushButton("Search Movie")
         self.watchlist_btn = QPushButton("Watchlist")
         self.favorites_btn = QPushButton("Favorites")
+        self.recommendations_btn = QPushButton("Recommendations")
 
         self.trending_btn.clicked.connect(self.show_trending_movies)
         self.search_btn.clicked.connect(self.show_search_page)
         self.watchlist_btn.clicked.connect(self.show_watchlist_page)
         self.favorites_btn.clicked.connect(self.show_favorites_page)
+        self.recommendations_btn.clicked.connect(self.show_recommendations_page)
 
         # Add the buttons to the navbar layout
         nav_bar.addWidget(self.trending_btn)
         nav_bar.addWidget(self.search_btn)
         nav_bar.addWidget(self.watchlist_btn)
         nav_bar.addWidget(self.favorites_btn)
+        nav_bar.addWidget(self.recommendations_btn)
 
         main_layout.addLayout(nav_bar)
 
@@ -75,6 +78,11 @@ class MovieApp(QWidget):
         self.favorites_page = QWidget()
         self.init_favorites_page()
         self.stacked_widget.addWidget(self.favorites_page)
+
+        # Reccomendations Page
+        self.recommendations_page = QWidget()
+        self.init_recommendations_page()
+        self.stacked_widget.addWidget(self.recommendations_page)
 
         self.setLayout(main_layout)
         self.show_trending_movies()
@@ -227,7 +235,7 @@ class MovieApp(QWidget):
         self.load_favorites_movies()
 
     def load_favorites_movies(self):
-        """Fetch and display movies in the favorites with dynamic columns."""
+        """Fetch and display movies in the favorites with correct button states."""
         for i in reversed(range(self.favorites_grid.count())):
             widget = self.favorites_grid.itemAt(i).widget()
             if widget:
@@ -241,8 +249,62 @@ class MovieApp(QWidget):
         row, col = 0, 0
         for movie in favorites_movies:
             movie_id, title, poster_path = movie[1], movie[2], movie[3]  # Extract movie details
-            movie_data = {"title": title, "poster_path": poster_path}  # Create a dictionary for the movie
-            self.add_movie_to_grid(self.favorites_grid, movie_data, row, col)
+            movie_data = {"id": movie_id, "title": title, "poster_path": poster_path}  # Include `id`
+            self.add_movie_to_grid(self.favorites_grid, movie_data, row, col)  # Pass `movie_id` to ensure correct state
+            col += 1
+            if col >= columns:
+                col = 0
+                row += 1
+
+    def init_recommendations_page(self):
+        layout = QVBoxLayout(self.recommendations_page)
+
+        self.recommendations_label = QLabel("Movie Recommendations")
+        self.recommendations_label.setAlignment(Qt.AlignCenter)
+        font = QFont()
+        font.setPointSize(24)
+        font.setBold(True)
+        self.recommendations_label.setFont(font)
+        layout.addWidget(self.recommendations_label)
+
+        self.recommendations_scroll_area = QScrollArea()
+        self.recommendations_scroll_area.setWidgetResizable(True)
+        self.recommendations_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        self.recommendations_scroll_widget = QWidget()
+        self.recommendations_grid = QGridLayout(self.recommendations_scroll_widget)
+        self.recommendations_grid.setSpacing(GAP_SIZE)
+
+        self.recommendations_scroll_area.setWidget(self.recommendations_scroll_widget)
+        layout.addWidget(self.recommendations_scroll_area)
+
+        self.load_recommendations()
+
+    def load_recommendations(self):
+        for i in reversed(range(self.recommendations_grid.count())):
+            widget = self.recommendations_grid.itemAt(i).widget()
+            if widget:
+                widget.setParent(None)
+
+        favorite_movies = self.database.fetch_favorites()
+        if(len(favorite_movies) == 0):
+            return
+        movie_titles = [movie[2] for movie in favorite_movies]
+        recommendations = self.api.get_movie_recommendations(movie_titles)
+        print(recommendations)
+        for i in range(0, len(recommendations)):
+            movies, _ = self.api.search_movies(recommendations[i], per_page=1)
+            if (len(movies) == 0):
+                continue
+            recommendations[i] = movies[0]
+            print(movies[0])
+
+        grid_width = self.recommendations_scroll_area.viewport().width() - 40
+        columns = max(1, grid_width // (POSTER_WIDTH + GAP_SIZE))
+
+        row, col = 0, 0
+        for movie in recommendations:
+            self.add_movie_to_grid(self.recommendations_grid, movie, row, col)
             col += 1
             if col >= columns:
                 col = 0
@@ -407,6 +469,7 @@ class MovieApp(QWidget):
         """Add movie to the favorites and update the UI."""
         self.database.add_to_favorites(movie_id, title, poster_path)
         self.load_favorites_movies()  # Reload the favorites to reflect changes
+        self.load_recommendations()  # Update recommendations after adding a new favorite
 
     def remove_from_favorites(self, movie_id):
         """Remove movie from the favorites and update the UI."""
@@ -437,12 +500,14 @@ class MovieApp(QWidget):
     def show_favorites_page(self):
         self.stacked_widget.setCurrentWidget(self.favorites_page)
 
+    def show_recommendations_page(self):
+        self.stacked_widget.setCurrentWidget(self.recommendations_page)
+
     def resizeEvent(self, event):
         """Handle window resize event to adjust movie grid layout."""
         if hasattr(self, "movie_grid"):  # Ensure movie_grid is initialized
             self.load_trending_movies()  # Recalculate layout based on new width
         super().resizeEvent(event)
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
