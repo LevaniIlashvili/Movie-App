@@ -10,7 +10,6 @@ class MovieDatabase:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        # Create watchlist table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS watchlist (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -20,7 +19,6 @@ class MovieDatabase:
             )
         ''')
 
-        # Create favorites table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS favorites (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,7 +32,6 @@ class MovieDatabase:
         conn.close()
 
     def add_to_watchlist(self, movie_id, title, poster_path):
-        """Add a movie to the watchlist."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute('''
@@ -45,7 +42,6 @@ class MovieDatabase:
         conn.close()
 
     def remove_from_watchlist(self, movie_id):
-        """Remove a movie from the watchlist."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute('''
@@ -55,7 +51,6 @@ class MovieDatabase:
         conn.close()
 
     def add_to_favorites(self, movie_id, title, poster_path):
-        """Add a movie to the favorites."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute('''
@@ -66,7 +61,6 @@ class MovieDatabase:
         conn.close()
 
     def remove_from_favorites(self, movie_id):
-        """Remove a movie from favorites."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute('''
@@ -76,7 +70,6 @@ class MovieDatabase:
         conn.close()
 
     def fetch_watchlist(self):
-        """Fetch all movies in the watchlist."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM watchlist')
@@ -85,7 +78,6 @@ class MovieDatabase:
         return movies
 
     def fetch_favorites(self):
-        """Fetch all movies in the favorites."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM favorites')

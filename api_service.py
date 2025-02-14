@@ -11,7 +11,6 @@ API_KEY = os.getenv("TMDB_API_KEY")
 GEMINI_KEY=os.getenv("GEMINI_KEY")
 genai.configure(api_key=GEMINI_KEY)
 
-# MovieAPI Service
 class MovieAPI:
     def fetch_trending_movies(self, page=1):
         url = f"{BASE_URL}/trending/movie/week?api_key={API_KEY}&page={page}"
@@ -21,10 +20,9 @@ class MovieAPI:
             return []
         data = response.json()
 
-        # Ensure we are returning exactly two values: list of movies and total number of pages
-        movies = data['results']  # List of movies
-        total_pages = data['total_pages']  # Total number of pages
-        return movies, total_pages  # Return exactly two values
+        movies = data['results']
+        total_pages = data['total_pages']
+        return movies, total_pages
 
     def search_movies(self, query, page=1, per_page=20):
         url = f"{BASE_URL}/search/movie?api_key={API_KEY}&query={query}&page={page}&per_page={per_page}"
